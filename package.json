@@ -1,0 +1,45 @@
+{
+  "name": "com.unity.vehicles",
+  "displayName": "Vehicles",
+  "version": "0.1.0-exp.5",
+  "unity": "6000.0",
+  "unityRelease": "0f1",
+  "description": "Unity Vehicles aims to be a universal vehicle controller for ECS that covers a wide range of vehicle types and configurations. \n\n Navigate to the \"Samples\" tab in order to download the vehicle samples, which can serve as a starting point for creating your own vehicles.",
+  "dependencies": {
+    "com.unity.entities": "1.3.10",
+    "com.unity.physics": "1.3.10",
+    "com.unity.modules.uielements": "1.0.0",
+    "com.unity.modules.physics": "1.0.0"
+  },
+  "samples": [
+    {
+      "displayName": "Minimal Vehicle Sample",
+      "description": "Sample with the minimal vehicle setup.",
+      "path": "Samples~/Minimal Vehicle Sample"
+    },
+    {
+      "displayName": "Advanced Vehicle Sample",
+      "description": "Sample showcasing various vehicle types with canera, UI, obstacles and more.",
+      "path": "Samples~/Advanced Vehicle Sample"
+    }
+  ],
+  "keywords": [
+    "unity",
+    "vehicle",
+    "car",
+    "wheel",
+    "physics"
+  ],
+  "_upm": {
+    "changelog": "### Added\n* Initial release"
+  },
+  "upmCi": {
+    "footprint": "e57b73cd2f2622dcda52d001b171617200897e65"
+  },
+  "documentationUrl": "https://docs.unity3d.com/Packages/com.unity.vehicles@0.1/manual/index.html",
+  "repository": {
+    "url": "https://github.cds.internal.unity3d.com/unity/com.unity.vehicles.git",
+    "type": "git",
+    "revision": "360a52c1acdbea8c1f315e24d355ee1c1b789e0a"
+  }
+}
