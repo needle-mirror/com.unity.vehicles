@@ -101,12 +101,11 @@ namespace Unity.Vehicles
         [BurstCompile]
         internal void OnUpdate(ref SystemState state)
         {
-            state.Dependency = new WheelTransformsJob
+            state.Dependency = new WheelTransformsUpdateFromSimulationJob
             {
                 DeltaTime = SystemAPI.Time.DeltaTime,
-                LocalToWorldLookup = SystemAPI.GetComponentLookup<LocalToWorld>(true),
                 LocalTransformLookup = SystemAPI.GetComponentLookup<LocalTransform>(false),
-            }.ScheduleParallel(state.Dependency);
+            }.Schedule(state.Dependency);
         }
     }
 
@@ -122,65 +121,105 @@ namespace Unity.Vehicles
         [BurstCompile]
         internal void OnUpdate(ref SystemState state)
         {
-            state.Dependency = new WheelTransformsJob
+            state.Dependency = new WheelTransformsUpdateFromPresentationWithoutInterpolationJob
             {
                 DeltaTime = SystemAPI.Time.DeltaTime,
-                LocalToWorldLookup = SystemAPI.GetComponentLookup<LocalToWorld>(true),
                 LocalTransformLookup = SystemAPI.GetComponentLookup<LocalTransform>(false),
-            }.ScheduleParallel(state.Dependency);
+            }.Schedule(state.Dependency);
+            state.Dependency = new WheelTransformsUpdateFromPresentationWithInterpolationJob
+            {
+                DeltaTime = SystemAPI.Time.DeltaTime,
+                LocalTransformLookup = SystemAPI.GetComponentLookup<LocalTransform>(false),
+            }.Schedule(state.Dependency);
         }
     }
 
     /// <summary>
-    /// Job handling the update of wheel transforms
+    /// Job handling the update of wheel transforms from simulation vehicle transform
     /// </summary>
     [BurstCompile]
-    public partial struct WheelTransformsJob : IJobEntity
+    [WithAll(typeof(LocalTransform))]
+    public partial struct WheelTransformsUpdateFromSimulationJob : IJobEntity
     {
         /// <summary>
         /// The time delta
         /// </summary>
         public float DeltaTime;
         /// <summary>
-        /// Local to world component lookup
-        /// </summary>
-        [ReadOnly] public ComponentLookup<LocalToWorld> LocalToWorldLookup;
-        /// <summary>
         /// Local transform component lookup
         /// </summary>
-        [NativeDisableParallelForRestriction] public ComponentLookup<LocalTransform> LocalTransformLookup;
+        public ComponentLookup<LocalTransform> LocalTransformLookup;
 
         void Execute(Entity entity, ref DynamicBuffer<WheelOnVehicle> vehicleWheelsBuffer)
         {
-            RigidTransform vehicleTransform = new RigidTransform(LocalToWorldLookup[entity].Value);
+            LocalTransform vehicleLocalTransform = LocalTransformLookup[entity];
+            RigidTransform vehicleTransform =
+                new RigidTransform(vehicleLocalTransform.Rotation, vehicleLocalTransform.Position);
 
-            for (int i = 0; i < vehicleWheelsBuffer.Length; i++)
-            {
-                WheelOnVehicle wheelOnVehicle = vehicleWheelsBuffer[i];
-                if (LocalTransformLookup.HasComponent(wheelOnVehicle.Entity))
-                {
-                    // Calculate new wheel position relative to the parent vehicleTransform but do not store the values
-                    // as that is reserved for the physics step.
-                    RigidTransform newSuspensionWorldTransform =
-                        VehicleUtilities.GetSteeredSuspensionWorldTransform(in vehicleTransform, in wheelOnVehicle);
+            VehicleUtilities.UpdateWheelTransforms(
+                DeltaTime,
+                in vehicleTransform,
+                ref vehicleWheelsBuffer,
+                ref LocalTransformLookup);
+        }
+    }
 
-                    // SuspensionLength is the same between the physics updates, so update the wheel position just 
-                    // from the new vehicle and suspension transforms.
-                    wheelOnVehicle.VisualSuspensionLength = math.lerp(wheelOnVehicle.VisualSuspensionLength,
-                        wheelOnVehicle.SuspensionLength,
-                        MathUtilities.GetSharpnessInterpolant(wheelOnVehicle.Wheel.VisualSuspensionSharpness, DeltaTime));
+    /// <summary>
+    /// Job handling the update of wheel transforms from interpolated vehicle transform
+    /// </summary>
+    [BurstCompile]
+    [WithAll(typeof(PhysicsGraphicalSmoothing))]
+    public partial struct WheelTransformsUpdateFromPresentationWithInterpolationJob : IJobEntity
+    {
+        /// <summary>
+        /// The time delta
+        /// </summary>
+        public float DeltaTime;
+        /// <summary>
+        /// Local transform component lookup
+        /// </summary>
+        public ComponentLookup<LocalTransform> LocalTransformLookup;
 
-                    RigidTransform newWheelWorldTransform =
-                        VehicleUtilities.GetWheelWorldTransform(in newSuspensionWorldTransform,
-                            wheelOnVehicle.VisualSuspensionLength);
+        void Execute(in LocalToWorld ltw, ref DynamicBuffer<WheelOnVehicle> vehicleWheelsBuffer)
+        {
+            RigidTransform vehicleTransform = new RigidTransform(ltw.Value);
 
-                    // Update the visual wheel position
-                    LocalTransformLookup[wheelOnVehicle.Entity] =
-                        LocalTransform.FromPositionRotation(newWheelWorldTransform.pos, newWheelWorldTransform.rot);
+            VehicleUtilities.UpdateWheelTransforms(
+                DeltaTime,
+                in vehicleTransform,
+                ref vehicleWheelsBuffer,
+                ref LocalTransformLookup);
+        }
+    }
 
-                    vehicleWheelsBuffer[i] = wheelOnVehicle;
-                }
-            }
+    /// <summary>
+    /// Job handling the update of wheel transforms from interpolated vehicle transform
+    /// </summary>
+    [BurstCompile]
+    [WithNone(typeof(PhysicsGraphicalSmoothing))]
+    [WithAll(typeof(LocalTransform))]
+    public partial struct WheelTransformsUpdateFromPresentationWithoutInterpolationJob : IJobEntity
+    {
+        /// <summary>
+        /// The time delta
+        /// </summary>
+        public float DeltaTime;
+        /// <summary>
+        /// Local transform component lookup
+        /// </summary>
+        public ComponentLookup<LocalTransform> LocalTransformLookup;
+
+        void Execute(Entity entity, ref DynamicBuffer<WheelOnVehicle> vehicleWheelsBuffer)
+        {
+            LocalTransform vehicleLocalTransform = LocalTransformLookup[entity];
+            RigidTransform vehicleTransform =
+                new RigidTransform(vehicleLocalTransform.Rotation, vehicleLocalTransform.Position);
+
+            VehicleUtilities.UpdateWheelTransforms(
+                DeltaTime,
+                in vehicleTransform,
+                ref vehicleWheelsBuffer,
+                ref LocalTransformLookup);
         }
     }
 }

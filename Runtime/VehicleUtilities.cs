@@ -4,6 +4,7 @@ using Unity.Entities;
 using Unity.Mathematics;
 using Unity.Physics;
 using Unity.Physics.Extensions;
+using Unity.Transforms;
 using UnityEngine;
 
 namespace Unity.Vehicles
@@ -606,6 +607,41 @@ namespace Unity.Vehicles
             wheelForward = VehicleUtilities.GetWheelForward(in steeredSuspensionWorldTransform);
             wheelUp = VehicleUtilities.GetWheelUp(in steeredSuspensionWorldTransform);
             wheelRight = VehicleUtilities.GetWheelRight(in steeredSuspensionWorldTransform);
+        }
+    
+        internal static void UpdateWheelTransforms(
+            float deltaTime,
+            in RigidTransform vehicleTransform, 
+            ref DynamicBuffer<WheelOnVehicle> vehicleWheelsBuffer,
+            ref ComponentLookup<LocalTransform> localTransformLookup)
+        {
+            for (int i = 0; i < vehicleWheelsBuffer.Length; i++)
+            {
+                WheelOnVehicle wheelOnVehicle = vehicleWheelsBuffer[i];
+                if (localTransformLookup.HasComponent(wheelOnVehicle.Entity))
+                {
+                    // Calculate new wheel position relative to the parent vehicleTransform but do not store the values
+                    // as that is reserved for the physics step.
+                    RigidTransform newSuspensionWorldTransform =
+                        VehicleUtilities.GetSteeredSuspensionWorldTransform(in vehicleTransform, in wheelOnVehicle);
+
+                    // SuspensionLength is the same between the physics updates, so update the wheel position just 
+                    // from the new vehicle and suspension transforms.
+                    wheelOnVehicle.VisualSuspensionLength = math.lerp(wheelOnVehicle.VisualSuspensionLength,
+                        wheelOnVehicle.SuspensionLength,
+                        MathUtilities.GetSharpnessInterpolant(wheelOnVehicle.Wheel.VisualSuspensionSharpness, deltaTime));
+
+                    RigidTransform newWheelWorldTransform =
+                        VehicleUtilities.GetWheelWorldTransform(in newSuspensionWorldTransform,
+                            wheelOnVehicle.VisualSuspensionLength);
+
+                    // Update the visual wheel position
+                    localTransformLookup[wheelOnVehicle.Entity] =
+                        LocalTransform.FromPositionRotation(newWheelWorldTransform.pos, newWheelWorldTransform.rot);
+
+                    vehicleWheelsBuffer[i] = wheelOnVehicle;
+                }
+            }
         }
     }
 }
